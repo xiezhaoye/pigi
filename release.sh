@@ -26,7 +26,7 @@ echo "已打包 $OUT/$FILE ($SIZE 字节)"
 
 if [ "$PUBLISH" = 1 ]; then
   # 先传 zip 再传 latest.json,客户端不会看到有版本信息却没有安装包。版本化文件名不覆盖旧包。
-  npx wrangler r2 object put "pigi-releases/$FILE" --file "$OUT/$FILE" --content-type application/zip --remote
+  npx wrangler r2 object put "pigi-releases/$FILE" --file "$OUT/$FILE" --content-type application/zip --content-disposition "attachment; filename=\"$FILE\"" --remote
   npx wrangler r2 object put "pigi-releases/latest.json" --file "$OUT/latest.json" --content-type application/json --cache-control no-cache --remote
   echo "已发布 $VERSION ($BUILD)"
 fi
