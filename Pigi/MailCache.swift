@@ -1,0 +1,37 @@
+import Foundation
+
+/// Mail headers kept on disk so a launch only has to ask the servers about what is new.
+/// Bodies are not stored; they are fetched when a mail is opened.
+enum MailCache {
+    private static var url: URL? {
+        guard let dir = try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+        ) else { return nil }
+        let folder = dir.appendingPathComponent("pigi", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder.appendingPathComponent("mail-headers.json")
+    }
+
+    static func load() -> [Mail] {
+        guard let url, let data = try? Data(contentsOf: url),
+              let mails = try? JSONDecoder().decode([Mail].self, from: data) else { return [] }
+        return mails
+    }
+
+    static func save(_ mails: [Mail]) {
+        guard let url else { return }
+        let slim = mails.map { mail -> Mail in
+            var mail = mail
+            mail.body = ""
+            mail.bodyLoaded = false
+            return mail
+        }
+        if let data = try? JSONEncoder().encode(slim) {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    static func clear() {
+        if let url { try? FileManager.default.removeItem(at: url) }
+    }
+}
