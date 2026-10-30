@@ -26,7 +26,7 @@ struct MailDetailContent: View {
     @State private var remoteOverride: Bool?
     private var allowRemoteContent: Bool { remoteOverride ?? loadRemoteImages }
     let mail: Mail
-    var inset: CGFloat = 28
+    var inset: CGFloat = 26
     var onBack: (() -> Void)?
 
     var body: some View {
@@ -48,26 +48,27 @@ struct MailDetailContent: View {
                 VStack(spacing: 0) {
                     Group {
                         if mail.bodyLoaded {
-                            MailHTMLView(body: mail.body, isHTML: mail.isHTML, allowRemoteContent: allowRemoteContent)
+                            MailHTMLView(body: mail.body, isHTML: mail.isHTML, allowRemoteContent: allowRemoteContent,
+                                         horizontalInset: inset)
                         } else {
                             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
                 }
-                .background(Color.white)
+                .background(Color(nsColor: .textBackgroundColor))
             }
-            .background(Color.white)
+            .foregroundStyle(.primary)
+            .background(Color(nsColor: .textBackgroundColor))
             .onChange(of: mail.id) { remoteOverride = nil }
     }
 
-    /// Avatar on the left; beside it the sender with the time, the addresses, then the subject.
+    /// Sender, addresses, date and subject; the panel also has a back button.
     private func head(_ mail: Mail) -> some View {
         HStack(alignment: .top, spacing: 12) {
             if let onBack {
                 GlassCircleButton(systemImage: "chevron.left", action: onBack)
                     .keyboardShortcut(.cancelAction)
             }
-            AvatarView(name: mail.senderName, size: 36)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(mail.senderName).font(.system(size: 15, weight: .medium))

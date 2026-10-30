@@ -23,7 +23,7 @@ struct MailListView: View {
                                     .foregroundStyle(.secondary)
                                 Spacer()
                                 if section.id == state.sections.first?.id, state.unreadVisibleCount > 0 {
-                                    MarkAllReadLink { state.confirmingMarkAll = true }
+                                    MarkAllReadLink { state.confirmMarkAllRead(state.visibleMails) }
                                         .transition(.opacity)
                                 }
                             }
@@ -79,17 +79,13 @@ struct MailListView: View {
     }
 
     private var header: some View {
-        @Bindable var state = state
         return HStack(spacing: 10) {
             Text(state.scopeTitle)
                 .font(.system(size: 15, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer()
-            ReadToggle(isUnread: Binding(
-                get: { state.readFilter == .unread },
-                set: { state.readFilter = $0 ? .unread : .all }
-            ))
+            MailRefreshButton()
         }
         .padding(.horizontal, 14)
         .padding(.top, 5)
@@ -111,15 +107,16 @@ struct MailRow: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(alignment: .top, spacing: 12) {
-                AvatarView(name: mail.senderName, size: 36)
-                    .overlay(alignment: .topLeading) {
-                        if mail.isUnread {
-                            Circle().fill(Color.accentColor)
-                                .frame(width: 9, height: 9)
-                                .overlay(Circle().strokeBorder(Color(nsColor: .textBackgroundColor), lineWidth: 1.5))
-                                .offset(x: -3, y: -3)
-                        }
+                ZStack(alignment: .topLeading) {
+                    AvatarView(name: mail.senderName, size: 36)
+                    if mail.isUnread {
+                        Circle().fill(Color.accentColor)
+                            .frame(width: 9, height: 9)
+                            .padding(1.5)
+                            .background(Circle().fill(Color(nsColor: .textBackgroundColor)))
+                            .offset(x: -4.5, y: -4.5)
                     }
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
                         Text(mail.senderName)
@@ -194,13 +191,13 @@ struct MailRow: View {
 }
 
 /// The small text link beside the first date heading.
-private struct MarkAllReadLink: View {
+struct MarkAllReadLink: View {
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            Text("标记所有已读")
+            Text("全部已读")
                 .font(.system(size: 12))
                 .foregroundStyle(Color.accentColor.opacity(hovering ? 1 : 0.8))
                 .underline(hovering)

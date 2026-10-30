@@ -14,40 +14,25 @@ final class PanelModel {
             else { UserDefaults.standard.set("all", forKey: "panelScope") }
         }
     }
-    var unreadOnly = false { didSet { stayVisible = [] } }
-    var searchText = "" { didSet { stayVisible = [] } }
+    var searchText = ""
     var openedID: String?
     var picking = false
-    /// Mails read in this view stay listed under the unread filter until it changes.
-    var stayVisible: Set<String> = []
 }
 
 /// Menu bar window: the mail list under a mailbox picker, with the body opened in place.
 struct MenuPanel: View {
     @Environment(AppState.self) private var state
-    @Environment(\.openWindow) private var openWindow
     @State private var model = PanelModel()
 
     private var mails: [Mail] {
-        state.filteredMails(scope: model.scope, readFilter: model.unreadOnly ? .unread : .all,
-                            stay: model.stayVisible, query: model.searchText)
+        state.filteredMails(scope: model.scope, readFilter: .all, stay: [], query: model.searchText)
     }
 
     var body: some View {
         PaneCard {
-            if let mail = state.mails.first(where: { $0.id == model.openedID }) {
-                MailDetailContent(mail: mail, inset: 18, onBack: { model.openedID = nil })
-                    .background {
-                        Group {
-                            Button("") { step(1) }.shortcut(.nextMail)
-                            Button("") { step(-1) }.shortcut(.previousMail)
-                            Button("") { model.openedID = nil }.shortcut(.backToList)
-                        }
-                        .opacity(0).allowsHitTesting(false)
-                    }
-            } else {
-                list
-            }
+            panelContent
+                // Keep the menu bar window at a predictable size.
+                .frame(width: 438, height: 664)
         }
         .padding(8)
         .frame(width: 454, height: 680)
@@ -57,6 +42,23 @@ struct MenuPanel: View {
         .environment(model)
         .onAppear {
             if case .account(let id) = model.scope, !state.accounts.contains(where: { $0.id == id }) { model.scope = .all }
+            Task { await state.syncFromArchive() }
+        }
+    }
+
+    @ViewBuilder private var panelContent: some View {
+        if let mail = state.mails.first(where: { $0.id == model.openedID }) {
+            MailDetailContent(mail: mail, inset: 18, onBack: { model.openedID = nil })
+                .background {
+                    Group {
+                        Button("") { step(1) }.shortcut(.nextMail)
+                        Button("") { step(-1) }.shortcut(.previousMail)
+                        Button("") { model.openedID = nil }.shortcut(.backToList)
+                    }
+                    .opacity(0).allowsHitTesting(false)
+                }
+        } else {
+            list
         }
     }
 
@@ -65,7 +67,9 @@ struct MenuPanel: View {
     private var unreadForScope: Int { state.unreadCount(model.scope) }
 
     /// The round icon for the current mailbox (or the tray for all), with its unread count.
-    private func badge(_ count: Int, size: CGFloat = 17) -> some View {
+    // Avoid `badge`: View.badge(Int) wins over an overload with a default size,
+    // which would embed this entire MenuPanel inside its own overlay recursively.
+    private func unreadBadge(_ count: Int, size: CGFloat = 17) -> some View {
         Text(count > 99 ? "99+" : "\(count)")
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(.white)
@@ -98,14 +102,11 @@ struct MenuPanel: View {
             Color.black.opacity(0.001).onTapGesture { model.picking = false }
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    pickerRow(title: "打开主窗口", subtitle: nil, count: 0, selected: false,
-                              icon: AnyView(Image(systemName: "macwindow").font(.system(size: 13)).frame(width: 28, height: 28))) {
-                        model.picking = false
-                        showMainWindow()
+                    HStack(spacing: 0) {
+                        pickerRow(title: "全部邮件", subtitle: nil, count: state.unreadCount(.all), selected: model.scope == .all,
+                                  icon: AnyView(icon(for: .all, size: 28))) { pick(.all) }
+                        MailRefreshButton().padding(.trailing, 6)
                     }
-                    Divider().padding(.vertical, 4)
-                    pickerRow(title: "全部邮件", subtitle: nil, count: state.unreadCount(.all), selected: model.scope == .all,
-                              icon: AnyView(icon(for: .all, size: 28))) { pick(.all) }
                     ForEach(state.sidebarGroups.filter { !$0.accounts.isEmpty }) { entry in
                         ForEach(entry.accounts) { account in
                             let alias = state.accountAliases[account.id]
@@ -151,7 +152,7 @@ struct MenuPanel: View {
                     HStack(spacing: 8) {
                         icon(for: model.scope, size: 30)
                             .overlay(alignment: .topTrailing) {
-                                if unreadForScope > 0 { badge(unreadForScope).offset(x: 6, y: -5) }
+                                if unreadForScope > 0 { unreadBadge(unreadForScope).offset(x: 6, y: -5) }
                             }
                         Text(title).font(.system(size: 15, weight: .semibold)).lineLimit(1).truncationMode(.middle)
                         Image(systemName: "chevron.down")
@@ -163,26 +164,45 @@ struct MenuPanel: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                ReadToggle(isUnread: Binding(get: { model.unreadOnly }, set: { model.unreadOnly = $0 }))
+                Button {
+                    model.picking = false
+                    showMainWindow()
+                } label: {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("打开主窗口")
+                .accessibilityLabel("打开主窗口")
             }
             .padding(.horizontal, 14)
             .frame(height: 52)
             searchField
-            let sections = AppState.sections(of: mails)
+            // Bound the number of eagerly created rows in the menu bar panel.
+            let sections = AppState.sections(of: Array(mails.prefix(60)))
             if sections.isEmpty {
                 Spacer()
-                Text(model.unreadOnly ? "没有未读邮件" : "没有邮件").foregroundStyle(.secondary)
+                Text("没有邮件").foregroundStyle(.secondary)
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 2) {
                         ForEach(sections) { section in
-                            Text(section.title)
-                                .font(.system(size: 12.5, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 12)
-                                .padding(.bottom, 6)
+                            HStack {
+                                Text(section.title)
+                                    .font(.system(size: 12.5, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                if section.id == sections.first?.id, mails.contains(where: \.isUnread) {
+                                    MarkAllReadLink { state.confirmMarkAllRead(mails) }
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .padding(.bottom, 6)
                             ForEach(section.mails) { mail in
                                 MailRow(mail: mail, showsAccount: model.scope == .all, isSelected: false, verticalPadding: 15, shortAccount: true) { open(mail) }
                             }
@@ -198,7 +218,7 @@ struct MenuPanel: View {
 
     private var title: String {
         switch model.scope {
-        case .all: "所有邮件"
+        case .all: "全部邮件"
         case .account(let id): state.accountAliases[id] ?? Self.userName(id)
         }
     }
@@ -231,7 +251,6 @@ struct MenuPanel: View {
 
     private func open(_ mail: Mail) {
         model.openedID = mail.id
-        model.stayVisible.insert(mail.id)
         state.markOpened(mail)
     }
 
@@ -246,13 +265,7 @@ struct MenuPanel: View {
 
     private func showMainWindow() {
         NSApp.keyWindow?.close() // the panel itself
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.contains("main") == true }) {
-            if window.isMiniaturized { window.deminiaturize(nil) }
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            openWindow(id: "main")
-        }
+        MainWindow.show()
     }
 }
 

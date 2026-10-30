@@ -25,3 +25,5 @@
 .editing-section+.editing-section{background:#fff}.annotation-figure .screenshot-button{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in}
 @media(max-width:640px){.editing-section.flip .editing-layout{grid-template-columns:1fr}.editing-section.flip .editing-copy,.editing-section.flip .annotation-figure{order:0}}
 .hero-description b{color:var(--ink)}
+
+.brand img.brand-wordmark{width:140px;height:44px;object-fit:contain;border-radius:0}.footer .brand img.brand-wordmark{width:105px;height:34px}@media(max-width:640px){.brand img.brand-wordmark{width:112px;height:36px}}

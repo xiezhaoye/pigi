@@ -9,6 +9,7 @@ actor LocalEngine {
     var sessions: [String: GmailSession] = [:]
     var due: [String: Date] = [:]
     var running: Set<String> = []
+    var dirty: Set<String> = []
     var listeners: [UUID: AsyncStream<Int>.Continuation] = [:]
     var loop: Task<Void, Never>?
 
@@ -95,15 +96,17 @@ actor LocalEngine {
     }
 
     func sync(_ email: String) async {
+        dirty.remove(email)
         let before = (try? currentSeq()) ?? 0
         let kind = (try? account(email)?["kind"]?.text) ?? "gmail"
         let delay = kind == "imap" ? await syncIMAP(email) : await syncGmail(email)
-        due[email] = Date().addingTimeInterval(delay)
+        due[email] = dirty.contains(email) ? .distantPast : Date().addingTimeInterval(delay)
         running.remove(email)
         if (try? currentSeq()) != before { announce() }
     }
 
     func trigger(_ email: String) {
+        dirty.insert(email)
         due[email] = .distantPast
     }
 

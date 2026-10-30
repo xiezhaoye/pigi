@@ -143,7 +143,7 @@ struct ArchiveClient {
     }
 
     /// Asks the engine to sync every mailbox right now.
-    func poke() async { await engine.poke() }
+    func poke() async throws { try await engine.poke() }
 
     /// Change numbers as the engine announces them; the first one arrives on subscribe.
     func events() -> AsyncThrowingStream<Int, Error> { engine.events() }

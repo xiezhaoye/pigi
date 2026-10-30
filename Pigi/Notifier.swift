@@ -12,6 +12,10 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     private(set) var access = Access.unknown
     private(set) var soundOn = true
+    static let codeCategory = "PIGI_VERIFICATION_CODE"
+    static let copyCodeAction = "PIGI_COPY_VERIFICATION_CODE"
+    static let codeKey = "verificationCode"
+    var onOpenMail: ((String) -> Void)?
 
     static var enabled: Bool {
         get { UserDefaults.standard.object(forKey: "notifyNewMail") as? Bool ?? true }
@@ -20,8 +24,16 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     private var center: UNUserNotificationCenter { .current() }
 
+    static var categories: Set<UNNotificationCategory> {
+        let copy = UNNotificationAction(identifier: Self.copyCodeAction, title: "复制验证码", options: [.authenticationRequired])
+        return [
+            UNNotificationCategory(identifier: Self.codeCategory, actions: [copy], intentIdentifiers: [], options: [])
+        ]
+    }
+
     func start() {
         center.delegate = self
+        center.setNotificationCategories(Self.categories)
         Task { await refresh() }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
             Task { @MainActor in await MailNotifier.shared.refresh() }
@@ -54,25 +66,48 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     func notify(_ mails: [Mail]) {
         guard Self.enabled, access == .allowed, !mails.isEmpty else { return }
-        if mails.count > 3 {
-            send(id: "batch-\(UUID().uuidString)", title: "\(mails.count) 封新邮件", body: mails.prefix(3).map(\.subject).joined(separator: "\n"), thread: "pigi")
-            return
-        }
-        for mail in mails {
-            let box = mail.accountID.split(separator: "@").first.map(String.init) ?? mail.accountID
-            send(id: mail.id, title: mail.senderName.isEmpty ? mail.senderEmail : mail.senderName,
-                 body: mail.subject, subtitle: box, thread: mail.accountID)
-        }
+        for request in Self.requests(for: mails) { center.add(request) }
     }
 
-    private func send(id: String, title: String, body: String, subtitle: String = "", thread: String) {
+    /// Keep code-bearing messages individual even when other mail is grouped.
+    static func requests(for mails: [Mail]) -> [UNNotificationRequest] {
+        let codes = mails.filter { $0.code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
+        let codeIDs = Set(codes.map(\.id))
+        let ordinary = mails.filter { !codeIDs.contains($0.id) }
+        var requests: [UNNotificationRequest] = []
+        if ordinary.count > 3 {
+            requests.append(request(id: "batch-\(UUID().uuidString)", title: "\(ordinary.count) 封新邮件",
+                                    body: ordinary.prefix(3).map(\.subject).joined(separator: "\n"), thread: "pigi"))
+        }
+        for mail in codes + (ordinary.count > 3 ? [] : ordinary) {
+            let box = mail.accountID.split(separator: "@").first.map(String.init) ?? mail.accountID
+            requests.append(request(id: mail.id, title: mail.senderName.isEmpty ? mail.senderEmail : mail.senderName,
+                                    body: mail.subject, subtitle: box, thread: mail.accountID, code: mail.code))
+        }
+        return requests
+    }
+
+    private static func request(id: String, title: String, body: String, subtitle: String = "", thread: String,
+                                code: String? = nil) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         content.title = title
         content.subtitle = subtitle
         content.body = body
         content.sound = .default
         content.threadIdentifier = thread
-        center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+        content.userInfo = ["mailID": id]
+        if let code = code?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty {
+            content.categoryIdentifier = codeCategory
+            content.userInfo[codeKey] = code
+        }
+        return UNNotificationRequest(identifier: id, content: content, trigger: nil)
+    }
+
+    @discardableResult
+    static func copyVerificationCode(from info: [AnyHashable: Any], to pasteboard: NSPasteboard = .general) -> Bool {
+        guard let code = info[codeKey] as? String, !code.isEmpty else { return false }
+        pasteboard.clearContents()
+        return pasteboard.setString(code, forType: .string)
     }
 
     // Show the banner even while pigi is in front.
@@ -80,7 +115,15 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
         -> UNNotificationPresentationOptions { [.banner, .sound] }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        await MainActor.run { NSApp.activate(ignoringOtherApps: true) }
+        await MainActor.run {
+            let info = response.notification.request.content.userInfo
+            if response.actionIdentifier == Self.copyCodeAction {
+                Self.copyVerificationCode(from: info)
+            } else if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+                if let id = info["mailID"] as? String { onOpenMail?(id) }
+                MainWindow.show()
+            }
+        }
     }
 }
 

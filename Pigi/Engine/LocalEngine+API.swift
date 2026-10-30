@@ -69,8 +69,8 @@ extension LocalEngine {
         for key in due.keys { due[key] = .distantPast }
     }
 
-    func poke() {
-        for key in ((try? db().query("SELECT email FROM accounts")) ?? []).compactMap({ $0["email"]?.text }) { due[key] = .distantPast }
+    func poke() throws {
+        for key in try db().query("SELECT email FROM accounts").compactMap({ $0["email"]?.text }) { trigger(key) }
     }
 
     nonisolated func events() -> AsyncThrowingStream<Int, Error> {

@@ -53,6 +53,7 @@ final class AppState {
     private var activeSyncs = 0
     var isSyncing: Bool { activeSyncs > 0 || archiveCatchingUp }
     var syncError: String?
+    var isRefreshing = false
 
     private static let syncWindow: TimeInterval = 30 * 24 * 3600
     /// Mail older than this many days is not kept in the self-hosted list.
@@ -61,6 +62,9 @@ final class AppState {
     var archiveStatus: String?
     var isArchiveSyncing = false
     private var archiveDirty = false
+    @ObservationIgnored private var archiveFullRequested = false
+    @ObservationIgnored private var archiveWaiters: [CheckedContinuation<Void, Never>] = []
+    private var archiveFailure: String?
     /// True while a large backlog is being pulled, so the sidebar can show progress.
     private var archiveCatchingUp = false
 
@@ -227,9 +231,23 @@ final class AppState {
 
     /// Manual refresh: asks the engine to pull every mailbox now, then reads what it has.
     func reloadAll(quiet: Bool = false) async {
+        guard !isRefreshing else { return }
         syncError = nil
-        Task { await ArchiveClient().poke() }
-        await syncFromArchive()
+        isRefreshing = true
+        defer { isRefreshing = false }
+        let client = ArchiveClient()
+        do {
+            try await MailRefresher(accounts: { try await client.accounts() }, poke: { try await client.poke() }, pull: {
+                await self.syncFromArchive()
+                if let error = self.archiveFailure { throw ArchiveClient.Failure(message: error) }
+            }).run()
+            if !quiet { showToast("邮件已刷新") }
+        } catch is CancellationError {
+            return
+        } catch {
+            syncError = "刷新失败:\(error.localizedDescription)"
+            if !quiet { showToast(syncError!) }
+        }
     }
 
     private func loadMissingAvatars() async {
@@ -298,7 +316,7 @@ final class AppState {
             }
             if let groupID { place(email, inGroup: groupID) }
             await ArchiveClient().ensureGmail([email])
-            await ArchiveClient().poke()
+            try await ArchiveClient().poke()
             await syncFromArchive()
             await loadMissingAvatars()
         } catch GmailAuth.AuthError.cancelled {
@@ -330,21 +348,30 @@ final class AppState {
     /// follows read/star/archive changes, and drops what fell out of the window.
     /// `full` starts from the beginning instead of the last change number.
     func syncFromArchive(full: Bool = false) async {
+        archiveFullRequested = archiveFullRequested || full
         if isArchiveSyncing {
             archiveDirty = true
+            await withCheckedContinuation { archiveWaiters.append($0) }
             return
         }
         isArchiveSyncing = true
-        defer { isArchiveSyncing = false; archiveCatchingUp = false }
-        var full = full
+        defer {
+            isArchiveSyncing = false
+            archiveCatchingUp = false
+            let waiters = archiveWaiters
+            archiveWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
         repeat {
             archiveDirty = false
+            let full = archiveFullRequested
+            archiveFullRequested = false
             await pullArchive(full: full)
-            full = false
-        } while archiveDirty
+        } while archiveDirty || archiveFullRequested
     }
 
     private func pullArchive(full: Bool) async {
+        archiveFailure = nil
         await refreshServerAccounts()
         await ArchiveClient().ensureGmail()
         let days = ArchiveSettings.windowDays
@@ -374,6 +401,7 @@ final class AppState {
                 MailNotifier.shared.notify(freshMails.filter { !hiddenAccounts.contains($0.accountID) && $0.date > recent })
             }
         } catch {
+            archiveFailure = error.localizedDescription
             archiveStatus = "同步失败:\(error.localizedDescription)"
         }
     }
@@ -501,8 +529,8 @@ final class AppState {
     var unreadVisibleCount: Int { visibleMails.filter(\.isUnread).count }
 
     /// Marks everything unread in the current list as read; Gmail mails go up one call per mailbox.
-    func markAllRead() {
-        let targets = visibleMails.filter(\.isUnread)
+    func markAllRead(ids: Set<String>? = nil) {
+        let targets = (ids.map { selected in mails.filter { selected.contains($0.id) } } ?? visibleMails).filter(\.isUnread)
         guard !targets.isEmpty else { return }
         let gmail = targets
         for mail in gmail {
@@ -533,7 +561,12 @@ final class AppState {
     private var toastTask: Task<Void, Never>?
     /// The mail whose unsubscribe the user is being asked to confirm.
     var unsubTarget: Mail?
-    var confirmingMarkAll = false
+    var markAllReadIDs: Set<String>?
+
+    func confirmMarkAllRead(_ list: [Mail]) {
+        let ids = Set(list.filter(\.isUnread).map(\.id))
+        markAllReadIDs = ids.isEmpty ? nil : ids
+    }
 
     func showToast(_ text: String) {
         toast = text

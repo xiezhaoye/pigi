@@ -85,10 +85,21 @@ private struct GeneralPage: View {
     @AppStorage("loadRemoteImages") private var loadRemoteImages = true
     @AppStorage("showFullEmail") private var showFullEmail = false
     @AppStorage("showInDock") private var showInDock = true
+    @AppStorage("appearanceMode") private var appearance: AppAppearance = .system
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             PageHeader(title: "通用", note: "邮件阅读的常规选项。")
+            HStack {
+                Text("外观").font(.system(size: 13.5))
+                Spacer()
+                Picker("外观", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 160)
+                .onChange(of: appearance) { appearance.apply() }
+            }
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("加载远程图片").font(.system(size: 13.5))
@@ -664,6 +675,8 @@ private struct NotificationsPage: View {
             }
             .padding(14)
             .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text("通知停留时间由 macOS 的临时或持久样式管理，系统不提供按秒设置的公开接口。验证码通知可在选项或展开后选择“复制验证码”。")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
             Spacer()
         }
         .padding(EdgeInsets(top: 32, leading: 32, bottom: 24, trailing: 32))

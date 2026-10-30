@@ -18,12 +18,13 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             // The window buttons are drawn by AppKit in this row.
-            HStack(spacing: 6) {
-                if layout.sidebarWidth >= 200 { Text("Pigi").font(.system(size: 19, weight: .semibold)) }
-                Spacer()
+            HStack(spacing: 0) {
+                BrandLockup()
+                    .frame(width: min(56, max(0, layout.sidebarWidth - SidebarMetrics.trafficLightsX - 70)), height: 22)
+                Spacer(minLength: 0)
             }
-            .padding(.leading, SidebarMetrics.trafficLightsX + 84)
-            .padding(.trailing, 12)
+            .padding(.leading, SidebarMetrics.trafficLightsX + 66)
+            .padding(.trailing, 4)
             .frame(height: SidebarMetrics.headerHeight)
 
             ScrollView {
@@ -214,6 +215,17 @@ struct SidebarRail: View {
                 .padding(.trailing, folded ? 16 : 0)
         }
         .focusEffectDisabled()
+    }
+}
+
+private struct BrandLockup: View {
+    var body: some View {
+        Image("BrandLockup")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(.primary)
+            .accessibilityLabel("pigi")
     }
 }
 

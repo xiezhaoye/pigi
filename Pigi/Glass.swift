@@ -294,21 +294,21 @@ private struct DialogButton: View {
 }
 
 
-/// The "全部 / 未读" switch used in both mail lists.
-struct ReadToggle: View {
-    @Binding var isUnread: Bool
-
+/// The same refresh operation and progress state in both mail lists.
+struct MailRefreshButton: View {
+    @Environment(AppState.self) private var state
     var body: some View {
-        HStack(spacing: 7) {
-            Text(isUnread ? "未读" : "全部")
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(.secondary)
-            Toggle("", isOn: $isUnread)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .tint(.blue)
-                .labelsHidden()
+        Button { Task { await state.reloadAll() } } label: {
+            ZStack {
+                Image(systemName: "arrow.clockwise").opacity(state.isRefreshing ? 0 : 1)
+                if state.isRefreshing { ProgressView().controlSize(.small) }
+            }
+            .frame(width: 28, height: 28)
         }
+        .buttonStyle(.plain)
+        .disabled(state.isRefreshing)
+        .help(state.isRefreshing ? "正在拉取最新邮件…" : "刷新邮件")
+        .accessibilityLabel("刷新邮件")
     }
 }
 
@@ -337,13 +337,13 @@ private struct FeedbackOverlays: ViewModifier {
                                 + [GlassDialog.Action(label: "屏蔽此发件人") { state.muteSender(mail) }])
                             + [GlassDialog.Action(label: "取消", isCancel: true) {}],
                         dismiss: { state.unsubTarget = nil })
-                } else if state.confirmingMarkAll {
+                } else if let ids = state.markAllReadIDs {
                     GlassDialog(
-                        title: "要把 \(state.unreadVisibleCount) 封未读邮件都标记为已读吗?",
+                        title: "要把 \(ids.count) 封未读邮件都标记为已读吗?",
                         message: "当前列表里的所有未读邮件都会变为已读。",
-                        actions: [GlassDialog.Action(label: "标记已读") { state.markAllRead() },
+                        actions: [GlassDialog.Action(label: "标记已读") { state.markAllRead(ids: ids) },
                                   GlassDialog.Action(label: "取消", isCancel: true) {}],
-                        dismiss: { state.confirmingMarkAll = false })
+                        dismiss: { state.markAllReadIDs = nil })
                 }
             }
             .overlay {
@@ -354,6 +354,6 @@ private struct FeedbackOverlays: ViewModifier {
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: state.toast)
             .animation(.easeOut(duration: 0.18), value: state.unsubTarget?.id)
-            .animation(.easeOut(duration: 0.18), value: state.confirmingMarkAll)
+            .animation(.easeOut(duration: 0.18), value: state.markAllReadIDs != nil)
     }
 }

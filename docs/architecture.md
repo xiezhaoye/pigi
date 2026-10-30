@@ -43,3 +43,11 @@ Pigi/Engine/     同步引擎:Store、MIME、Detect、Imap、Gmail
 landing/         官网(Cloudflare Workers Static Assets)
 docs/            文档
 ```
+
+## 界面与刷新（0.1.1）
+
+外观选择保存在 appearanceMode，原生窗口与 WebKit 正文共用深浅色。面板邮箱菜单提供刷新，标题右上角图标打开主窗口；批量已读保存当前列表未读 ID。验证码通知通过 category/action 复制已提取的验证码。
+
+手动刷新调用本地引擎 poke，观察账号 last_sync/错误，期间读取本地变更；同一刷新期间防重入，错误和超时不会误报成功。邮箱同步中收到触发会合并为后续一轮；不改变 Gmail 增量同步和 IMAP 后端。Gmail 现有 8 请求/秒不是按配额单位加权的预算，大量历史回填仍可能限流。
+
+回归命令：`bash Tests/workflow-regression.sh`（7 项外观、刷新及通知）；`bash Tests/panel-layout-regression.sh`（8 项未读计数/范围布局，内存数据库）；`bash Tests/mail-appearance-regression.sh`（12 项真实 WebKit 深浅色渲染）。测试不读取真实邮件或凭据。
