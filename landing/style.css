@@ -27,3 +27,28 @@
 .hero-description b{color:var(--ink)}
 
 .brand img.brand-wordmark{width:140px;height:44px;object-fit:contain;border-radius:0}.footer .brand img.brand-wordmark{width:105px;height:34px}@media(max-width:640px){.brand img.brand-wordmark{width:112px;height:36px}}
+
+/* Tutorial layout: keep identifiers readable without widening the page. */
+.doc-article{width:100%;padding:56px 32px 80px;overflow-wrap:anywhere}
+.doc-article h1{font-size:36px;line-height:1.35;margin:0 0 24px;letter-spacing:-.03em;text-wrap:balance}
+.doc-article h2{font-size:24px;line-height:1.4;margin:40px 0 14px}
+.doc-article p,.doc-article li{font-size:16px;line-height:1.8}
+.doc-article p+p{margin-top:16px}
+.doc-article ul,.doc-article ol{padding-inline-start:24px;margin:12px 0 20px}
+.doc-article li+li{margin-top:8px}
+.doc-article blockquote{margin:24px 0;padding:16px 20px;border-inline-start:3px solid var(--line);background:var(--surface);border-radius:0 10px 10px 0}
+.doc-article code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;padding:2px 5px;background:var(--surface);border-radius:4px;overflow-wrap:anywhere;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.doc-article strong{font-weight:600}
+.doc-article a{text-decoration:underline;text-underline-offset:3px}
+.doc-page .nav .brand{flex-shrink:0}
+.doc-page .footer nav a{display:inline-flex;align-items:center;min-height:44px}
+@media(max-width:640px){
+  .doc-article{padding:32px 20px 56px}
+  .doc-article h1{font-size:28px;line-height:1.4;margin-bottom:20px}
+  .doc-article h2{font-size:21px;margin-top:32px}
+  .doc-article blockquote{padding:12px 16px}
+  .doc-page .nav-inner{gap:12px}
+  .doc-page .nav nav{gap:12px}
+  .doc-page .nav nav>a,.doc-page .nav nav>a:nth-child(2){display:flex;align-items:center;min-height:44px;white-space:nowrap}
+  .doc-page .footer nav{flex-wrap:wrap;row-gap:8px}
+}

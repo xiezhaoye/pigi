@@ -71,9 +71,9 @@ const shell = (title, desc, canonical, body) => `<!doctype html>
   <link rel="icon" type="image/png" href="../assets/logo.png">
   <link rel="stylesheet" href="../${css}">
 </head>
-<body>
+<body class="doc-page">
 <header class="nav"><div class="nav-inner"><a class="brand" href="../"><img src="../assets/logo.png" width="38" height="38" alt=""><span>pigi</span></a><nav aria-label="主导航"><a href="../">首页</a><a href="../privacy/">隐私政策</a><a href="https://github.com/xiezhaoye/pigi">GitHub</a></nav></div></header>
-<main class="privacy">
+<main class="privacy doc-article">
 ${body}
 </main>
 <footer class="wrap footer"><a class="brand" href="../"><img src="../assets/logo.png" width="26" height="26" alt=""><span>pigi</span></a><p>由 <a href="https://www.xiezhaoye.site/">xiezhaoye</a> 开发,MIT 开源。</p><nav aria-label="页脚导航"><a href="../gmail-api/">Gmail 接入</a><a href="../privacy/">隐私政策</a><a href="../terms/">服务条款</a></nav></footer>
